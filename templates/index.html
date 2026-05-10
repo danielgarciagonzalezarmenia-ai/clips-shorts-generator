@@ -392,6 +392,7 @@
 
         function handleFile(file) {
             if (!file.type.startsWith('video/')) { alert('Selecciona un archivo de video'); return; }
+            if (file.size > 50 * 1024 * 1024) { alert('El video es demasiado grande. Máximo 50MB.'); return; }
             uploadedFile = file;
             fileName.textContent = file.name;
             fileSize.textContent = formatSize(file.size);

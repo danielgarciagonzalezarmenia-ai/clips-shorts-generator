@@ -12,11 +12,15 @@ app.secret_key = os.urandom(24)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['CLIPS_FOLDER'] = 'clips'
 app.config['OUTPUTS_FOLDER'] = 'outputs'
-app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 
 for folder in [app.config['UPLOAD_FOLDER'], app.config['CLIPS_FOLDER'], app.config['OUTPUTS_FOLDER']]:
     if not os.path.exists(folder):
         os.makedirs(folder)
+
+@app.errorhandler(413)
+def too_large(e):
+    return jsonify({'error': 'El video es demasiado grande. Máximo 50MB.'}), 413
 
 # Background task storage
 _tasks = {}
