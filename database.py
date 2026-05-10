@@ -1,9 +1,13 @@
 import os
 import firebase_admin
 from firebase_admin import credentials, firestore, auth
-from google.cloud.firestore import FieldFilter
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
+
+try:
+    from google.cloud.firestore import FieldFilter
+except ImportError:
+    FieldFilter = None
 
 _initialized = False
 _db = None
@@ -14,13 +18,9 @@ def _init():
         return
     env_json = os.environ.get('FIREBASE_CREDENTIALS_JSON')
     if env_json:
-        import json as _json, tempfile
-        tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False)
-        tmp.write(env_json)
-        tmp.close()
-        cred = credentials.Certificate(tmp.name)
+        import json as _json
+        cred = credentials.Certificate(cert=_json.loads(env_json))
         firebase_admin.initialize_app(cred)
-        os.unlink(tmp.name)
     else:
         cred_path = os.path.join(os.path.dirname(__file__), 'firebase_credentials.json')
         if os.path.exists(cred_path):
@@ -35,11 +35,16 @@ def _get_collection(name):
     _init()
     return _db.collection(name)
 
+def _where(collection, field, op, value):
+    if FieldFilter:
+        return collection.where(filter=FieldFilter(field, op, value))
+    return collection.where(field, op, value)
+
 # === USERS ===
 
 def create_user(username, password):
     users = _get_collection('users')
-    existing = users.where(filter=FieldFilter('username', '==', username)).limit(1).get()
+    existing = _where(users, 'username', '==', username).limit(1).get()
     if len(list(existing)) > 0:
         return None
     try:
@@ -56,7 +61,7 @@ def create_user(username, password):
 
 def verify_user(username, password):
     users = _get_collection('users')
-    docs = users.where(filter=FieldFilter('username', '==', username)).limit(1).get()
+    docs = _where(users, 'username', '==', username).limit(1).get()
     for doc in docs:
         data = doc.to_dict()
         if check_password_hash(data['password_hash'], password):
@@ -95,8 +100,7 @@ def load_config(clip_id, user_id):
 def delete_user_data(user_id):
     batch = _db.batch()
     configs = _get_collection('configs')
-    docs = configs.where(filter=FieldFilter('user_id', '==', user_id)).get()
-    for doc in docs:
+    for doc in _where(configs, 'user_id', '==', user_id).get():
         batch.delete(doc.reference)
     batch.commit()
     users = _get_collection('users')
