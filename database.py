@@ -12,12 +12,22 @@ def _init():
     global _initialized, _db
     if _initialized:
         return
-    cred_path = os.path.join(os.path.dirname(__file__), 'firebase_credentials.json')
-    if os.path.exists(cred_path):
-        cred = credentials.Certificate(cred_path)
+    env_json = os.environ.get('FIREBASE_CREDENTIALS_JSON')
+    if env_json:
+        import json as _json, tempfile
+        tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False)
+        tmp.write(env_json)
+        tmp.close()
+        cred = credentials.Certificate(tmp.name)
         firebase_admin.initialize_app(cred)
+        os.unlink(tmp.name)
     else:
-        firebase_admin.initialize_app()
+        cred_path = os.path.join(os.path.dirname(__file__), 'firebase_credentials.json')
+        if os.path.exists(cred_path):
+            cred = credentials.Certificate(cred_path)
+            firebase_admin.initialize_app(cred)
+        else:
+            firebase_admin.initialize_app()
     _db = firestore.client()
     _initialized = True
 

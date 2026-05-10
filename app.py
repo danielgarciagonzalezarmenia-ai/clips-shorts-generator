@@ -352,10 +352,22 @@ def list_videos():
 @login_required
 def youtube_auth():
     from google_auth_oauthlib.flow import InstalledAppFlow
-    flow = InstalledAppFlow.from_client_secrets_file(
-        'client_secrets.json',
-        scopes=['https://www.googleapis.com/auth/youtube.upload']
-    )
+    import json as _json, tempfile, os
+    env_json = os.environ.get('GOOGLE_CLIENT_SECRETS')
+    if env_json:
+        tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False)
+        tmp.write(env_json)
+        tmp.close()
+        flow = InstalledAppFlow.from_client_secrets_file(
+            tmp.name,
+            scopes=['https://www.googleapis.com/auth/youtube.upload']
+        )
+        os.unlink(tmp.name)
+    else:
+        flow = InstalledAppFlow.from_client_secrets_file(
+            'client_secrets.json',
+            scopes=['https://www.googleapis.com/auth/youtube.upload']
+        )
     auth_url, _ = flow.authorization_url(prompt='consent')
     return jsonify({'auth_url': auth_url})
 
