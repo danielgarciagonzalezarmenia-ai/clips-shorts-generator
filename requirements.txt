@@ -1,0 +1,10 @@
+flask>=3.0
+opencv-python>=4.8
+numpy>=1.24
+librosa>=0.10
+google-api-python-client>=2.0
+google-auth-oauthlib>=1.0
+imageio>=2.30
+imageio-ffmpeg>=0.5
+gunicorn>=21.2
+werkzeug>=3.0
