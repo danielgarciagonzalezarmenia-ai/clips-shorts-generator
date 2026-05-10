@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Preview — CLIPS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        slate: { 950: '#0a0a0f', 900: '#12121a', 800: '#1a1a28', 700: '#252540', 600: '#333355', 400: '#8888aa', 300: '#aaaacc', 200: '#cccce0', 100: '#eeeef5' },
+                        accent: { DEFAULT: '#22d3ee', hover: '#06b6d4', muted: '#0e7490' }
+                    },
+                    fontFamily: { sans: ['Outfit', 'sans-serif'] }
+                }
+            }
+        }
+    </script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Outfit', sans-serif; background: #0a0a0f; color: #eeeef5; }
+        .glass { background: rgba(26, 26, 40, 0.8); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.05); }
+        .btn-primary { background: linear-gradient(135deg, #22d3ee 0%, #06b6d4 100%); transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(34, 211, 238, 0.3); }
+        .btn-secondary { background: #252540; border: 1px solid #333355; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+        .btn-secondary:hover { border-color: #22d3ee; }
+        .card { background: #1a1a28; border: 1px solid #252540; }
+    </style>
+</head>
+<body class="antialiased min-h-[100dvh] flex flex-col">
+    <header class="glass px-6 py-4 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <a href="/" class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-accent to-accent-muted flex items-center justify-center">
+                    <i class="ph ph-film-slate text-lg text-slate-950"></i>
+                </div>
+                <span class="text-lg font-semibold tracking-tight">CLIPS</span>
+            </a>
+            <span class="text-slate-600 mx-2">/</span>
+            <span class="text-sm text-slate-400">Preview</span>
+            <span class="text-accent text-sm font-mono ml-2">#{{ clip_id }}</span>
+        </div>
+        <a href="/editor/{{ clip_id }}" class="btn-secondary px-4 py-2 rounded-xl text-sm flex items-center gap-2">
+            <i class="ph ph-arrow-left"></i> Volver al editor
+        </a>
+    </header>
+    <main class="flex-1 flex items-center justify-center p-6">
+        <div class="card rounded-3xl p-8 max-w-2xl w-full">
+            {% if gif_path %}
+            <div class="rounded-2xl overflow-hidden bg-slate-900 mb-6 flex items-center justify-center" style="min-height:400px">
+                <img src="/{{ gif_path }}" class="max-w-full max-h-[70vh] object-contain" alt="Preview animado">
+            </div>
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-xl font-semibold tracking-tight">Preview del clip</h2>
+                    <p class="text-sm text-slate-400 mt-1">Vista previa animada con las posiciones de los cuadros</p>
+                </div>
+                <div class="flex gap-3">
+                    <button class="btn-secondary px-4 py-2 rounded-xl text-sm flex items-center gap-2" onclick="window.location.reload()">
+                        <i class="ph ph-arrows-clockwise"></i> Regenerar
+                    </button>
+                    <a href="/editor/{{ clip_id }}" class="btn-primary px-4 py-2 rounded-xl text-sm flex items-center gap-2">
+                        <i class="ph ph-pencil"></i> Editar
+                    </a>
+                </div>
+            </div>
+            {% else %}
+            <div class="text-center py-16">
+                <div class="w-20 h-20 mx-auto mb-6 rounded-2xl bg-slate-800 flex items-center justify-center">
+                    <i class="ph ph-image text-4xl text-slate-600"></i>
+                </div>
+                <h2 class="text-2xl font-semibold tracking-tight mb-3">Sin preview</h2>
+                <p class="text-slate-400 max-w-md mx-auto mb-8">No hay un preview generado para este clip. Ve al editor para configurar los cuadros y generar un preview.</p>
+                <a href="/editor/{{ clip_id }}" class="btn-primary px-6 py-3 rounded-xl font-medium inline-flex items-center gap-2">
+                    <i class="ph ph-arrow-right"></i> Ir al editor
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </main>
+</body>
+</html>

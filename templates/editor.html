@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editor — CLIPS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        slate: { 950: '#0a0a0f', 900: '#12121a', 800: '#1a1a28', 700: '#252540', 600: '#333355', 400: '#8888aa', 300: '#aaaacc', 200: '#cccce0', 100: '#eeeef5' },
+                        accent: { DEFAULT: '#22d3ee', hover: '#06b6d4', muted: '#0e7490' }
+                    },
+                    fontFamily: { sans: ['Outfit', 'sans-serif'] }
+                }
+            }
+        }
+    </script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Outfit', sans-serif; background: #0a0a0f; color: #eeeef5; }
+        .glass { background: rgba(26, 26, 40, 0.85); backdrop-filter: blur(24px); border: 1px solid rgba(255,255,255,0.05); }
+        .glass::before { content: ''; position: absolute; inset: 0; border-radius: inherit; border: 1px solid rgba(255,255,255,0.08); pointer-events: none; }
+        .btn-primary { background: linear-gradient(135deg, #22d3ee 0%, #06b6d4 100%); transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(34, 211, 238, 0.3); }
+        .btn-primary:active { transform: translateY(0) scale(0.98); }
+        .btn-secondary { background: #252540; border: 1px solid #333355; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+        .btn-secondary:hover { border-color: #22d3ee; background: #2a2a48; }
+        .btn-secondary:active { transform: scale(0.98); }
+        .card { background: #1a1a28; border: 1px solid #252540; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+        .card:hover { border-color: #22d3ee; }
+
+        .mode-btn { padding: 0.5rem 1rem; border-radius: 0.75rem; font-size: 0.8rem; font-weight: 500; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); border: 1px solid #252540; cursor: pointer; }
+        .mode-btn.active { background: linear-gradient(135deg, #22d3ee 0%, #06b6d4 100%); color: #0a0a0f; border-color: #22d3ee; }
+        .mode-btn:not(.active) { background: transparent; color: #8888aa; }
+        .mode-btn:not(.active):hover { border-color: #22d3ee; color: #eeeef5; }
+
+        #sourceContainer { position: relative; background: #000; border-radius: 0.75rem; overflow: hidden; }
+        #sourceContainer video { width: 100%; height: 100%; display: block; }
+
+        .box-overlay {
+            position: absolute; border: 2px solid #22d3ee; background: rgba(34, 211, 238, 0.06);
+            cursor: move; z-index: 10; border-radius: 2px;
+        }
+        .box-overlay .box-label {
+            position: absolute; top: -20px; left: -1px; font-size: 10px; padding: 1px 6px 2px;
+            border-radius: 3px 3px 0 0; background: #22d3ee; color: #0a0a0f; font-weight: 600; white-space: nowrap;
+            line-height: 1.2;
+        }
+        .box-overlay .resize-handle {
+            position: absolute; width: 12px; height: 12px; background: #22d3ee;
+            border: 2px solid #0a0a0f; border-radius: 50%;
+        }
+        .box-overlay .resize-handle.se { bottom: -6px; right: -6px; cursor: nwse-resize; }
+        .box-overlay .resize-handle.nw { top: -6px; left: -6px; cursor: nwse-resize; }
+        .box-overlay .resize-handle.ne { top: -6px; right: -6px; cursor: nesw-resize; }
+        .box-overlay .resize-handle.sw { bottom: -6px; left: -6px; cursor: nesw-resize; }
+
+        #previewCanvas { width: 100%; border-radius: 0.5rem; background: #000; display: block; cursor: default; }
+        #previewCanvas.dragging { cursor: grabbing; }
+        #previewCanvas .box-handle { cursor: move; }
+
+        .timeline-container { position: relative; width: 100%; height: 40px; background: #12121a; border-radius: 0.75rem; border: 1px solid #252540; overflow: hidden; }
+        .timeline-scrubber { position: absolute; top: -2px; bottom: -2px; width: 3px; background: #22d3ee; z-index: 20; pointer-events: none; border-radius: 2px; }
+        .keyframe-marker { position: absolute; top: 2px; width: 12px; height: 12px; background: #22d3ee; border-radius: 50%; transform: translateX(-50%); z-index: 10; cursor: pointer; border: 2px solid #0a0a0f; transition: transform 0.15s; }
+        .keyframe-marker:hover { transform: translateX(-50%) scale(1.4); }
+
+        .skeleton { background: linear-gradient(90deg, #1a1a28 25%, #252540 50%, #1a1a28 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
+        @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+
+        input, select { background: #12121a; border: 1px solid #252540; transition: border-color 0.3s; color: #eeeef5; padding: 0.4rem 0.6rem; border-radius: 0.5rem; width: 100%; }
+        input:focus, select:focus { outline: none; border-color: #22d3ee; }
+        label { font-size: 0.65rem; color: #8888aa; letter-spacing: 0.05em; text-transform: uppercase; }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #12121a; }
+        ::-webkit-scrollbar-thumb { background: #333355; border-radius: 3px; }
+    </style>
+</head>
+<body class="antialiased">
+    <div class="min-h-[100dvh] flex flex-col">
+        <header class="relative glass z-50">
+            <div class="max-w-[1600px] mx-auto px-5 py-2.5 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <a href="/" class="flex items-center gap-2">
+                        <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-accent to-accent-muted flex items-center justify-center">
+                            <i class="ph ph-film-slate text-base text-slate-950"></i>
+                        </div>
+                        <span class="text-base font-semibold tracking-tight">CLIPS</span>
+                    </a>
+                    <span class="text-slate-600 mx-0.5">/</span>
+                    <span class="text-xs text-slate-400">Editor</span>
+                    <span class="text-accent text-xs font-mono ml-0.5">#{{ clip_id }}</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <button class="btn-secondary px-2.5 py-1.5 rounded-lg text-xs flex items-center gap-1" id="saveBtn" onclick="saveConfig()">
+                        <i class="ph ph-floppy-disk"></i> Guardar
+                    </button>
+                    <button class="btn-primary px-3 py-1.5 rounded-lg text-xs flex items-center gap-1" onclick="renderClip()">
+                        <i class="ph ph-video-camera"></i> Render
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <main class="flex-1 p-3 lg:p-4">
+            <div class="max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-3 lg:gap-4">
+                <!-- Left: Source video + timeline -->
+                <div class="space-y-3">
+                    <div class="card rounded-2xl p-3">
+                        <div class="flex items-center gap-2 text-[11px] text-slate-500 mb-2">
+                            <i class="ph ph-crop"></i>
+                            <span>Arrastra esquinas para redimensionar &middot; Arrastra centro para mover</span>
+                        </div>
+                        <div id="sourceContainer">
+                            <video id="player" playsinline crossorigin="anonymous"></video>
+                            <div id="boxesLayer" class="absolute inset-0 z-10"></div>
+                        </div>
+                    </div>
+
+                    <div class="card rounded-2xl p-3 space-y-2">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <button class="btn-secondary w-7 h-7 rounded-lg flex items-center justify-center text-sm" onclick="togglePlay()" id="playBtn">
+                                    <i class="ph ph-play"></i>
+                                </button>
+                                <button class="btn-secondary w-7 h-7 rounded-lg flex items-center justify-center text-sm" onclick="toggleMute()" id="muteBtn">
+                                    <i class="ph ph-speaker-high"></i>
+                                </button>
+                                <span class="font-mono text-[11px]" id="timeDisplay">0:00 / 0:00</span>
+                            </div>
+                            <div class="flex items-center gap-1.5">
+                                <button class="btn-secondary px-2 py-1 rounded text-[11px] flex items-center gap-0.5" onclick="splitSegment()">
+                                    <i class="ph ph-scissors"></i> Dividir
+                                </button>
+                                <button class="btn-secondary px-2 py-1 rounded text-[11px] flex items-center gap-0.5" onclick="mergeSegment()">
+                                    <i class="ph ph-arrows-merge"></i> Unir
+                                </button>
+                                <span class="text-[11px] text-slate-500" id="segCount">1 seg</span>
+                            </div>
+                        </div>
+                        <div class="timeline-container" id="timeline" onclick="seekTimeline(event)">
+                            <div class="timeline-scrubber" id="scrubber" style="left:0%"></div>
+                            <div id="segmentsContainer" class="relative w-full h-full"></div>
+                        </div>
+                        <input type="range" id="timelineRange" min="0" max="1000" value="0"
+                               oninput="seekByRange(this.value)" class="w-full cursor-pointer"
+                               style="height:2px;border-radius:1px;accent-color:#22d3ee;">
+                    </div>
+                </div>
+
+                <!-- Right: Preview vertical + controls -->
+                <div class="space-y-3">
+                    <div class="card rounded-2xl p-3">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="flex items-center gap-1.5 text-[11px] text-slate-500">
+                                <i class="ph ph-device-mobile"></i> Preview final (9:16)
+                            </span>
+                            <button class="btn-secondary px-1.5 py-0.5 rounded text-[10px] flex items-center gap-0.5" onclick="generatePreview()">
+                                <i class="ph ph-download"></i> GIF
+                            </button>
+                        </div>
+                        <canvas id="previewCanvas" class="rounded-lg"></canvas>
+                    </div>
+
+                    <div class="card rounded-2xl p-3">
+                        <label class="block mb-1.5 text-[11px]">Layout</label>
+                        <div class="flex gap-1">
+                            <button class="mode-btn active" data-mode="single" onclick="setMode('single')"><i class="ph ph-person mr-0.5"></i>Single</button>
+                            <button class="mode-btn" data-mode="dual" onclick="setMode('dual')"><i class="ph ph-users mr-0.5"></i>Dual</button>
+                            <button class="mode-btn" data-mode="gaming" onclick="setMode('gaming')"><i class="ph ph-game-controller mr-0.5"></i>Gaming</button>
+                        </div>
+                    </div>
+
+                    <div class="card rounded-2xl p-3">
+                        <label class="block mb-1.5 text-[11px]">Posiciones</label>
+                        <div id="boxProps" class="space-y-1.5"></div>
+                    </div>
+
+                    <div class="card rounded-2xl p-3">
+                        <label class="block mb-1.5 text-[11px]">Segmentos</label>
+                        <div id="segmentList" class="space-y-0.5 max-h-[120px] overflow-y-auto"></div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const clipId = '{{ clip_id }}';
+        const userId = '{{ user_id }}';
+        const player = document.getElementById('player');
+        const canvas = document.getElementById('previewCanvas');
+        const ctx = canvas.getContext('2d');
+        let isPlaying = false, isMuted = false;
+        let currentMode = 'single';
+        let segments = [];
+        let currentSegIdx = -1;
+        // boxConfig = source crop positions (what part of source to capture)
+        let boxConfig = {};
+        // outputConfig = output placement positions (where in 9:16 to place it)
+        let outputConfig = {};
+        let dragState = null;
+        let previewRAF = null;
+        let sourceContainerEl = document.getElementById('sourceContainer');
+        let boxesLayer = document.getElementById('boxesLayer');
+        let vidAspect = 16/9;
+
+        const boxLabels = {
+            single: { box1: 'CUADRO' },
+            dual: { box1: 'PERSONA 1', box2: 'PERSONA 2' },
+            gaming: { face: 'CARA', gameplay: 'JUEGO' }
+        };
+
+        function curSeg() { return segments[currentSegIdx] || {}; }
+        function updateSegConfig() {
+            const s = curSeg();
+            if (!s) return;
+            s.layout_mode = currentMode;
+            s.box_config = JSON.parse(JSON.stringify(boxConfig));
+            s.output_config = JSON.parse(JSON.stringify(outputConfig));
+        }
+        function loadSegConfig(idx) {
+            const s = segments[idx];
+            if (!s) return;
+            // Only save previous segment if we're switching from a valid segment
+            if (currentSegIdx >= 0 && currentSegIdx < segments.length) {
+                updateSegConfig();
+            }
+            currentSegIdx = idx;
+            currentMode = s.layout_mode || 'single';
+            boxConfig = JSON.parse(JSON.stringify(s.box_config || {}));
+            outputConfig = JSON.parse(JSON.stringify(s.output_config || {}));
+            document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === currentMode));
+            renderBoxes(); updateBoxProps();
+            renderSegmentBars(); updateSegmentList();
+        }
+        function findSegmentAtTime(t) {
+            for (let i = 0; i < segments.length; i++) {
+                if (t >= segments[i].start && t < segments[i].end) return i;
+            }
+            return segments.length - 1;
+        }
+
+        // === VIDEO SETUP ===
+        player.src = '/clips/' + userId + '/' + clipId + '.mp4';
+        player.load();
+
+        player.addEventListener('loadedmetadata', () => {
+            const vw = player.videoWidth, vh = player.videoHeight;
+            if (vw && vh) {
+                vidAspect = vw / vh;
+                const parentW = sourceContainerEl.parentElement.clientWidth - 24;
+                const maxH = window.innerHeight * 0.6;
+                let desiredH = parentW / vidAspect;
+                if (desiredH > maxH) desiredH = maxH;
+                sourceContainerEl.style.height = Math.floor(desiredH) + 'px';
+                canvas.width = 300; canvas.height = Math.round(300 * 16/9);
+            }
+            document.querySelector('#timelineRange').max = Math.floor(player.duration * 10);
+            updateTimeDisplay();
+            startPreviewLoop();
+            // Init default segment if none loaded
+            if (!segments.length && player.duration) {
+                segments.push({
+                    start: 0, end: player.duration,
+                    layout_mode: 'single', box_config: {}, output_config: {}
+                });
+                currentSegIdx = 0;
+                setMode('single');
+            }
+        });
+
+        player.addEventListener('timeupdate', () => { updateTimeDisplay(); updateScrubber(); });
+
+        player.addEventListener('play', () => {
+            isPlaying = true;
+            document.getElementById('playBtn').innerHTML = '<i class="ph ph-pause"></i>';
+        });
+        player.addEventListener('pause', () => {
+            isPlaying = false;
+            document.getElementById('playBtn').innerHTML = '<i class="ph ph-play"></i>';
+        });
+
+        function togglePlay() { player.paused ? player.play() : player.pause(); }
+        function toggleMute() {
+            player.muted = !player.muted;
+            isMuted = player.muted;
+            document.getElementById('muteBtn').innerHTML = isMuted
+                ? '<i class="ph ph-speaker-x"></i>' : '<i class="ph ph-speaker-high"></i>';
+        }
+        function updateTimeDisplay() {
+            const t = player.currentTime || 0, d = player.duration || 0;
+            document.getElementById('timeDisplay').textContent = fmt(t) + ' / ' + fmt(d);
+        }
+        function fmt(s) { const m = Math.floor(s/60); const sec = Math.floor(s%60); return m+':'+sec.toString().padStart(2,'0'); }
+        function updateScrubber() {
+            if (!player.duration) return;
+            const pct = (player.currentTime/player.duration)*100;
+            document.getElementById('scrubber').style.left = pct+'%';
+            document.getElementById('timelineRange').value = Math.floor(player.currentTime*10);
+        }
+        function seekTimeline(e) {
+            const r = e.currentTarget.getBoundingClientRect();
+            player.currentTime = ((e.clientX-r.left)/r.width)*player.duration;
+        }
+        function seekByRange(v) { player.currentTime = v/10; }
+
+        // === PREVIEW: crop from source-box, place at output-box ===
+        let outScaleX = 1, outScaleY = 1; // canvas → 9:16 output coords mapping
+
+        function startPreviewLoop() {
+            if (previewRAF) cancelAnimationFrame(previewRAF);
+            (function loop() { if (player.readyState >= 2) drawPreview(); previewRAF = requestAnimationFrame(loop); })();
+        }
+
+        function drawPreview() {
+            const cw = canvas.width, ch = canvas.height;
+            if (!cw || !ch) return;
+            ctx.fillStyle = '#000'; ctx.fillRect(0, 0, cw, ch);
+
+            const vw = player.videoWidth, vh = player.videoHeight;
+            if (!vw || !vh) return;
+
+            const t = player.currentTime || 0;
+            const srcPos = getCurrentBoxPositions();   // source positions — always live
+            const outPos = getCurrentOutputPositions(); // output placement — always live
+
+            // Output canvas maps to 9:16 space (1080x1920)
+            // Canvas is 300x533 (9:16), output space is 1080x1920
+            const OUT_W = 1080, OUT_H = 1920;
+            outScaleX = cw / OUT_W;
+            outScaleY = ch / OUT_H;
+
+            // For each box: crop from source → place at output position
+            Object.keys(srcPos).forEach((key) => {
+                const s = srcPos[key];
+                const o = outPos[key] || { x: 0, y: 0, width: OUT_W, height: OUT_H };
+
+                const sx = Math.max(0, s.x||0);
+                const sy = Math.max(0, s.y||0);
+                const sw = Math.max(1, s.width||1);
+                const sh = Math.max(1, s.height||1);
+
+                const dx = (o.x||0) * outScaleX;
+                const dy = (o.y||0) * outScaleY;
+                const dw = Math.max(1, (o.width||OUT_W) * outScaleX);
+                const dh = Math.max(1, (o.height||OUT_H) * outScaleY);
+
+                // Crop from source video at source-box position, place at output-box position
+                ctx.drawImage(player, sx, sy, sw, sh, dx, dy, dw, dh);
+
+                // Draw output box outline
+                const idx = Object.keys(srcPos).indexOf(key);
+                const color = idx === 0 ? '#22d3ee' : '#f59e0b';
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2;
+                ctx.strokeRect(dx, dy, dw, dh);
+                ctx.fillStyle = color + '15';
+                ctx.fillRect(dx, dy, dw, dh);
+
+                // Draw resize handles (4 corners)
+                const hSize = 6;
+                const corners = [
+                    [dx, dy],           // nw
+                    [dx+dw-hSize, dy],  // ne
+                    [dx, dy+dh-hSize],  // sw
+                    [dx+dw-hSize, dy+dh-hSize] // se
+                ];
+                ctx.fillStyle = color;
+                corners.forEach(c => { ctx.fillRect(c[0], c[1], hSize, hSize); });
+
+                // Label
+                const labels = boxLabels[currentMode];
+                ctx.fillStyle = color;
+                ctx.font = 'bold 10px Outfit, sans-serif';
+                ctx.fillText(labels[key]||key, dx + 3, dy - 3);
+            });
+        }
+
+        // === OUTPUT POSITIONS ===
+        function getDefaultOutputPositions() {
+            if (currentMode === 'single') return { box1: { x:0, y:0, width:1080, height:1920 } };
+            if (currentMode === 'dual') return {
+                box1: { x:0, y:0, width:540, height:1920 },
+                box2: { x:540, y:0, width:540, height:1920 }
+            };
+            return {
+                face: { x:0, y:0, width:1080, height:672 },
+                gameplay: { x:0, y:672, width:1080, height:1248 }
+            };
+        }
+
+        function getOutputBoxPosition(key) {
+            const defs = getDefaultOutputPositions();
+            const d = defs[key] || { x:0, y:0, width:540, height:1920 };
+            if (currentMode === 'single') {
+                return { x: outputConfig.x??d.x, y: outputConfig.y??d.y, width: outputConfig.width??d.width, height: outputConfig.height??d.height };
+            }
+            if (currentMode === 'dual') {
+                if (key === 'box1') return { x: outputConfig.box1_x??d.x, y: outputConfig.box1_y??d.y, width: outputConfig.box1_width??d.width, height: outputConfig.box1_height??d.height };
+                return { x: outputConfig.box2_x??d.x, y: outputConfig.box2_y??d.y, width: outputConfig.box2_width??d.width, height: outputConfig.box2_height??d.height };
+            }
+            if (key === 'face') return { x: outputConfig.face_x??d.x, y: outputConfig.face_y??d.y, width: outputConfig.face_width??d.width, height: outputConfig.face_height??d.height };
+            return { x: outputConfig.game_x??d.x, y: outputConfig.game_y??d.y, width: outputConfig.game_width??d.width, height: outputConfig.game_height??d.height };
+        }
+
+        function setOutputBoxPosition(key, pos) {
+            const r = v => Math.max(0, Math.round(v));
+            if (currentMode === 'single') { outputConfig.x=r(pos.x); outputConfig.y=r(pos.y); outputConfig.width=r(pos.width); outputConfig.height=r(pos.height); }
+            else if (currentMode === 'dual') {
+                if (key === 'box1') { outputConfig.box1_x=r(pos.x); outputConfig.box1_y=r(pos.y); outputConfig.box1_width=r(pos.width); outputConfig.box1_height=r(pos.height); }
+                else { outputConfig.box2_x=r(pos.x); outputConfig.box2_y=r(pos.y); outputConfig.box2_width=r(pos.width); outputConfig.box2_height=r(pos.height); }
+            } else {
+                if (key === 'face') { outputConfig.face_x=r(pos.x); outputConfig.face_y=r(pos.y); outputConfig.face_width=r(pos.width); outputConfig.face_height=r(pos.height); }
+                else { outputConfig.game_x=r(pos.x); outputConfig.game_y=r(pos.y); outputConfig.game_width=r(pos.width); outputConfig.game_height=r(pos.height); }
+            }
+        }
+
+        function initOutputConfig() {
+            const defs = getDefaultOutputPositions();
+            outputConfig = {};
+            Object.keys(defs).forEach(key => {
+                const d = defs[key];
+                if (currentMode === 'single') { outputConfig.x=d.x; outputConfig.y=d.y; outputConfig.width=d.width; outputConfig.height=d.height; }
+                else if (currentMode === 'dual') {
+                    if (key==='box1') { outputConfig.box1_x=d.x; outputConfig.box1_y=d.y; outputConfig.box1_width=d.width; outputConfig.box1_height=d.height; }
+                    else { outputConfig.box2_x=d.x; outputConfig.box2_y=d.y; outputConfig.box2_width=d.width; outputConfig.box2_height=d.height; }
+                } else {
+                    if (key==='face') { outputConfig.face_x=d.x; outputConfig.face_y=d.y; outputConfig.face_width=d.width; outputConfig.face_height=d.height; }
+                    else { outputConfig.game_x=d.x; outputConfig.game_y=d.y; outputConfig.game_width=d.width; outputConfig.game_height=d.height; }
+                }
+            });
+        }
+
+        function getCurrentOutputPositions() {
+            const defs = getDefaultOutputPositions();
+            const result = {};
+            Object.keys(defs).forEach(key => {
+                result[key] = getOutputBoxPosition(key);
+            });
+            return result;
+        }
+
+        // Returns the actual current box positions from boxConfig
+        function getCurrentBoxPositions() {
+            const vw = player.videoWidth || 1280, vh = player.videoHeight || 720;
+            if (currentMode === 'single') return { box1: { x: boxConfig.x||Math.floor(vw*0.15), y: boxConfig.y||Math.floor(vh*0.1), width: boxConfig.width||Math.floor(vw*0.7), height: boxConfig.height||Math.floor(vh*0.8) } };
+            if (currentMode === 'dual') return {
+                box1: { x: boxConfig.box1_x||0, y: boxConfig.box1_y||0, width: boxConfig.box1_width||Math.floor(vw*0.45), height: boxConfig.box1_height||vh },
+                box2: { x: boxConfig.box2_x||Math.floor(vw*0.55), y: boxConfig.box2_y||0, width: boxConfig.box2_width||Math.floor(vw*0.45), height: boxConfig.box2_height||vh }
+            };
+            return {
+                face: { x: boxConfig.face_x||Math.floor(vw*0.25), y: boxConfig.face_y||0, width: boxConfig.face_width||Math.floor(vw*0.5), height: boxConfig.face_height||Math.floor(vh*0.35) },
+                gameplay: { x: boxConfig.game_x||0, y: boxConfig.game_y||Math.floor(vh*0.35), width: boxConfig.game_width||vw, height: boxConfig.game_height||Math.floor(vh*0.65) }
+            };
+        }
+
+        // === MODE ===
+        function setMode(mode) {
+            currentMode = mode;
+            document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+            const vw = player.videoWidth || 1280, vh = player.videoHeight || 720;
+            boxConfig = {};
+            if (mode === 'single') { boxConfig.x=Math.floor(vw*0.15); boxConfig.y=Math.floor(vh*0.1); boxConfig.width=Math.floor(vw*0.7); boxConfig.height=Math.floor(vh*0.8); }
+            else if (mode === 'dual') { boxConfig.box1_x=0; boxConfig.box1_y=0; boxConfig.box1_width=Math.floor(vw*0.45); boxConfig.box1_height=vh; boxConfig.box2_x=Math.floor(vw*0.55); boxConfig.box2_y=0; boxConfig.box2_width=Math.floor(vw*0.45); boxConfig.box2_height=vh; }
+            else { boxConfig.face_x=Math.floor(vw*0.25); boxConfig.face_y=0; boxConfig.face_width=Math.floor(vw*0.5); boxConfig.face_height=Math.floor(vh*0.35); boxConfig.game_x=0; boxConfig.game_y=Math.floor(vh*0.35); boxConfig.game_width=vw; boxConfig.game_height=Math.floor(vh*0.65); }
+            initOutputConfig();
+            updateSegConfig();
+            renderSegmentBars(); updateSegmentList();
+            renderBoxes(); updateBoxProps();
+        }
+
+        // === BOX RENDERING ON SOURCE VIDEO ===
+        function renderBoxes() {
+            boxesLayer.innerHTML = '';
+            const rect = boxesLayer.getBoundingClientRect();
+            const vw = player.videoWidth || 1280, vh = player.videoHeight || 720;
+            const scX = (rect.width||800)/vw, scY = (rect.height||450)/vh;
+
+            Object.keys(boxLabels[currentMode]).forEach(key => {
+                const pos = getBoxPosition(key);
+                const el = document.createElement('div');
+                el.className = 'box-overlay';
+                el.dataset.boxKey = key;
+                const l = Math.round(pos.x*scX), t = Math.round(pos.y*scY);
+                const w = Math.max(8, Math.round(pos.width*scX)), h = Math.max(8, Math.round(pos.height*scY));
+                el.style.left = l+'px'; el.style.top = t+'px'; el.style.width = w+'px'; el.style.height = h+'px';
+
+                const label = document.createElement('div'); label.className = 'box-label'; label.textContent = boxLabels[currentMode][key]; el.appendChild(label);
+
+                // Resize handles (4 corners)
+                ['se','nw','ne','sw'].forEach(c => {
+                    const hdl = document.createElement('div'); hdl.className = 'resize-handle '+c;
+                    hdl.addEventListener('mousedown', (e) => { e.stopPropagation(); startResize(e, key, c); });
+                    el.appendChild(hdl);
+                });
+
+                el.addEventListener('mousedown', (e) => startDrag(e, key));
+                boxesLayer.appendChild(el);
+            });
+        }
+
+        function getBoxPosition(key) {
+            const vw = player.videoWidth || 1280, vh = player.videoHeight || 720;
+            if (currentMode === 'single') return { x: boxConfig.x||Math.floor(vw*0.15), y: boxConfig.y||Math.floor(vh*0.1), width: boxConfig.width||Math.floor(vw*0.7), height: boxConfig.height||Math.floor(vh*0.8) };
+            if (currentMode === 'dual') {
+                if (key === 'box1') return { x: boxConfig.box1_x||0, y: boxConfig.box1_y||0, width: boxConfig.box1_width||Math.floor(vw*0.45), height: boxConfig.box1_height||vh };
+                return { x: boxConfig.box2_x||Math.floor(vw*0.55), y: boxConfig.box2_y||0, width: boxConfig.box2_width||Math.floor(vw*0.45), height: boxConfig.box2_height||vh };
+            }
+            if (key === 'face') return { x: boxConfig.face_x||Math.floor(vw*0.25), y: boxConfig.face_y||0, width: boxConfig.face_width||Math.floor(vw*0.5), height: boxConfig.face_height||Math.floor(vh*0.35) };
+            return { x: boxConfig.game_x||0, y: boxConfig.game_y||Math.floor(vh*0.35), width: boxConfig.game_width||vw, height: boxConfig.game_height||Math.floor(vh*0.65) };
+        }
+
+        function setBoxPosition(key, pos) {
+            const r = v => Math.round(Math.max(0, v));
+            if (currentMode === 'single') { boxConfig.x=r(pos.x); boxConfig.y=r(pos.y); boxConfig.width=r(pos.width); boxConfig.height=r(pos.height); }
+            else if (currentMode === 'dual') {
+                if (key === 'box1') { boxConfig.box1_x=r(pos.x); boxConfig.box1_y=r(pos.y); boxConfig.box1_width=r(pos.width); boxConfig.box1_height=r(pos.height); }
+                else { boxConfig.box2_x=r(pos.x); boxConfig.box2_y=r(pos.y); boxConfig.box2_width=r(pos.width); boxConfig.box2_height=r(pos.height); }
+            } else {
+                if (key === 'face') { boxConfig.face_x=r(pos.x); boxConfig.face_y=r(pos.y); boxConfig.face_width=r(pos.width); boxConfig.face_height=r(pos.height); }
+                else { boxConfig.game_x=r(pos.x); boxConfig.game_y=r(pos.y); boxConfig.game_width=r(pos.width); boxConfig.game_height=r(pos.height); }
+            }
+        }
+
+        // === DRAG & RESIZE ===
+        function startDrag(e, key) {
+            e.preventDefault();
+            const rect = boxesLayer.getBoundingClientRect();
+            const vw = player.videoWidth||1280, vh = player.videoHeight||720;
+            const scX = vw/(rect.width||800), scY = vh/(rect.height||450);
+            const pos = getBoxPosition(key);
+            dragState = { key, type:'drag', startX:e.clientX, startY:e.clientY, origX:pos.x, origY:pos.y, origW:pos.width, origH:pos.height, sX:scX, sY:scY };
+            attachDragListeners();
+        }
+
+        function startResize(e, key, corner) {
+            e.preventDefault();
+            const rect = boxesLayer.getBoundingClientRect();
+            const vw = player.videoWidth||1280, vh = player.videoHeight||720;
+            const scX = vw/(rect.width||800), scY = vh/(rect.height||450);
+            const pos = getBoxPosition(key);
+            dragState = { key, type:'resize', corner, startX:e.clientX, startY:e.clientY, origX:pos.x, origY:pos.y, origW:pos.width, origH:pos.height, sX:scX, sY:scY };
+            attachDragListeners();
+        }
+
+        function attachDragListeners() {
+            const onMove = (ev) => {
+                if (!dragState) return;
+                const dx = (ev.clientX-dragState.startX)*dragState.sX;
+                const dy = (ev.clientY-dragState.startY)*dragState.sY;
+                if (dragState.type === 'drag') {
+                    setBoxPosition(dragState.key, {
+                        x: Math.max(0, dragState.origX+dx),
+                        y: Math.max(0, dragState.origY+dy),
+                        width: dragState.origW,
+                        height: dragState.origH
+                    });
+                } else if (dragState.type === 'resize') {
+                    let nx=dragState.origX, ny=dragState.origY, nw=dragState.origW, nh=dragState.origH;
+                    const c = dragState.corner;
+                    if (c.includes('e')) nw = Math.max(10, dragState.origW+dx);
+                    if (c.includes('w')) { nw = Math.max(10, dragState.origW-dx); nx = dragState.origX + (dragState.origW-nw); }
+                    if (c.includes('s')) nh = Math.max(10, dragState.origH+dy);
+                    if (c.includes('n')) { nh = Math.max(10, dragState.origH-dy); ny = dragState.origY + (dragState.origH-nh); }
+                    setBoxPosition(dragState.key, { x:nx, y:ny, width:nw, height:nh });
+                }
+                renderBoxes(); updateBoxProps();
+            };
+            const onUp = () => {
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onUp);
+                if (dragState) updateSegConfig();
+                dragState = null;
+            };
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        }
+
+        function updateBoxProps() {
+            const panel = document.getElementById('boxProps');
+            const labels = boxLabels[currentMode];
+            let html = '';
+            Object.keys(labels).forEach(key => {
+                const pos = getBoxPosition(key);
+                html += `<div class="bg-slate-900 rounded-lg p-2 space-y-1">
+                    <div class="text-[9px] text-accent font-semibold">${labels[key]}</div>
+                    <div class="grid grid-cols-4 gap-1">
+                        <div><label class="text-[8px]">X</label><input type="number" value="${pos.x}" data-key="${key}" data-prop="x" onchange="setBoxFromInput(this)" class="text-[10px] py-0.5 px-1"></div>
+                        <div><label class="text-[8px]">Y</label><input type="number" value="${pos.y}" data-key="${key}" data-prop="y" onchange="setBoxFromInput(this)" class="text-[10px] py-0.5 px-1"></div>
+                        <div><label class="text-[8px]">W</label><input type="number" value="${pos.width}" data-key="${key}" data-prop="width" onchange="setBoxFromInput(this)" class="text-[10px] py-0.5 px-1"></div>
+                        <div><label class="text-[8px]">H</label><input type="number" value="${pos.height}" data-key="${key}" data-prop="height" onchange="setBoxFromInput(this)" class="text-[10px] py-0.5 px-1"></div>
+                    </div>
+                </div>`;
+            });
+            panel.innerHTML = html;
+        }
+
+        function setBoxFromInput(input) {
+            const key = input.dataset.key, prop = input.dataset.prop, val = parseInt(input.value)||0;
+            const pos = getBoxPosition(key); pos[prop] = val; setBoxPosition(key, pos);
+            updateSegConfig(); renderBoxes();
+        }
+
+        // === SEGMENT FUNCTIONS ===
+        function updateSegCount() {
+            document.getElementById('segCount').textContent = segments.length + ' seg';
+        }
+
+        function renderSegmentBars() {
+            const container = document.getElementById('segmentsContainer');
+            if (!container || !player.duration) return;
+            const colors = ['#22d3ee','#f59e0b','#10b981','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316'];
+            let html = '';
+            segments.forEach((s, i) => {
+                const left = (s.start / player.duration) * 100;
+                const w = ((s.end - s.start) / player.duration) * 100;
+                const isActive = (i === currentSegIdx);
+                html += `<div class="segment-bar absolute top-0 h-full cursor-pointer transition-opacity ${isActive?'opacity-100':'opacity-40 hover:opacity-70'}" 
+                    style="left:${left}%;width:${w}%;background:${colors[i%colors.length]};border-radius:2px;"
+                    onclick="event.stopPropagation();loadSegConfig(${i});player.currentTime=${s.start}"></div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        function updateSegmentList() {
+            const container = document.getElementById('segmentList');
+            if (!container) return;
+            let html = '';
+            segments.forEach((s, i) => {
+                const active = i === currentSegIdx ? 'border-accent bg-accent/10' : 'border-slate-700';
+                const mode = s.layout_mode || 'single';
+                html += `<div class="flex items-center justify-between px-2 py-1 rounded border ${active} cursor-pointer text-[11px]" onclick="loadSegConfig(${i});player.currentTime=${s.start}">
+                    <span>Seg ${i+1} <span class="text-slate-500">(${fmt(s.start)}–${fmt(s.end)})</span></span>
+                    <span class="text-slate-400 uppercase text-[9px]">${mode}</span>
+                </div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        function splitSegment() {
+            if (!player.duration || segments.length < 1) return;
+            const t = player.currentTime || 0;
+            const idx = findSegmentAtTime(t);
+            const s = segments[idx];
+            if (!s || t <= s.start || t >= s.end) return;
+            const segA = {
+                start: s.start, end: t,
+                layout_mode: s.layout_mode || currentMode,
+                box_config: JSON.parse(JSON.stringify(s.box_config || {})),
+                output_config: JSON.parse(JSON.stringify(s.output_config || {}))
+            };
+            const segB = {
+                start: t, end: s.end,
+                layout_mode: s.layout_mode || currentMode,
+                box_config: JSON.parse(JSON.stringify(s.box_config || {})),
+                output_config: JSON.parse(JSON.stringify(s.output_config || {}))
+            };
+            segments.splice(idx, 1, segA, segB);
+            currentSegIdx = idx;
+            loadSegConfig(idx);
+            renderSegmentBars(); updateSegmentList(); updateSegCount();
+            saveConfig();
+        }
+
+        function mergeSegment() {
+            if (segments.length < 2) return;
+            const idx = currentSegIdx;
+            if (idx >= segments.length - 1) return;
+            const a = segments[idx], b = segments[idx + 1];
+            if (!a || !b) return;
+            segments.splice(idx, 2, {
+                start: a.start, end: b.end,
+                layout_mode: a.layout_mode || currentMode,
+                box_config: JSON.parse(JSON.stringify(a.box_config || {})),
+                output_config: JSON.parse(JSON.stringify(a.output_config || {}))
+            });
+            currentSegIdx = Math.min(idx, segments.length - 1);
+            loadSegConfig(currentSegIdx);
+            renderSegmentBars(); updateSegmentList(); updateSegCount();
+            saveConfig();
+        }
+
+        async function loadConfig() {
+            try {
+                const res = await fetch(`/api/load-config/${clipId}`);
+                const data = await res.json();
+                if (data.segments && data.segments.length) segments = data.segments;
+                if (segments.length) {
+                    const t = player.currentTime || 0;
+                    const idx = findSegmentAtTime(t);
+                    // Direct load without saving (no stale previous config to persist)
+                    const s = segments[idx];
+                    currentSegIdx = idx;
+                    boxConfig = JSON.parse(JSON.stringify(s.box_config || {}));
+                    outputConfig = JSON.parse(JSON.stringify(s.output_config || {}));
+                    currentMode = s.layout_mode || 'single';
+                    document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === currentMode));
+                    renderBoxes(); updateBoxProps();
+                    renderSegmentBars(); updateSegmentList();
+                }
+                updateSegCount();
+            } catch(e) { console.log('loadConfig error', e); }
+        }
+
+        async function saveConfig() {
+            updateSegConfig();
+            const btn = document.getElementById('saveBtn');
+            if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ph ph-spinner ph-spin"></i>'; }
+            try {
+                await fetch('/api/save-config', {
+                    method:'POST', headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({clip_id:clipId, segments})
+                });
+                if (btn) { btn.innerHTML = '<i class="ph ph-check-circle"></i>'; setTimeout(()=>{btn.innerHTML='<i class="ph ph-floppy-disk"></i> Guardar';btn.disabled=false;},1200); }
+            } catch(e) { if (btn) { btn.innerHTML='Error'; btn.disabled=false; } }
+        }
+
+        // === RENDER & GIF ===
+        function pollTask(taskId, onProgress) {
+            return new Promise((resolve,reject) => {
+                const interval = setInterval(async()=>{
+                    try {
+                        const res = await fetch('/api/task-status/'+taskId);
+                        const s = await res.json();
+                        if (onProgress) onProgress(s);
+                        if (s.status==='done') { clearInterval(interval); resolve(s); }
+                        else if (s.status==='error' || s.status==='not_found') { clearInterval(interval); reject(new Error(s.error||'Tarea no encontrada')); }
+                    } catch(e) { clearInterval(interval); reject(e); }
+                },600);
+            });
+        }
+
+        async function renderClip() {
+            const btn = event.currentTarget; btn.disabled=true; btn.innerHTML='<i class="ph ph-spinner ph-spin"></i> Guardando...';
+            try {
+                await saveConfig();
+                btn.innerHTML='<i class="ph ph-spinner ph-spin"></i> Render...';
+                const res = await fetch('/api/render-clip',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clip_id:clipId})});
+                const d = await res.json();
+                if (!d.task_id) throw new Error(d.error||'Error');
+                await pollTask(d.task_id, s => { btn.innerHTML='<i class="ph ph-spinner ph-spin"></i> '+(s.message||'')+' '+(s.progress||0)+'%'; });
+                btn.innerHTML='<i class="ph ph-check-circle"></i> Listo!';
+                setTimeout(()=>{btn.innerHTML='<i class="ph ph-video-camera"></i> Render';btn.disabled=false;},3000);
+            } catch(e) { btn.innerHTML='<i class="ph ph-x-circle"></i> '+e.message; btn.disabled=false; }
+        }
+
+        async function generatePreview() {
+            const container = document.querySelector('[id^="previewCanvas"]').parentElement;
+            container.innerHTML = '<div class="skeleton rounded-lg" style="aspect-ratio:9/16;min-height:200px"></div>';
+            try {
+                await saveConfig();
+                const res = await fetch('/api/generate-preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clip_id:clipId})});
+                const d = await res.json();
+                if (!d.task_id) throw new Error(d.error||'Error');
+                const result = await pollTask(d.task_id);
+                container.innerHTML = result.gif_path && result.gif_path!=='null'
+                    ? `<img src="/${result.gif_path}?t=${Date.now()}" class="w-full rounded-lg" alt="Preview">`
+                    : '<div class="text-red-400 text-xs text-center py-8">Error</div>';
+            } catch(e) { container.innerHTML = '<div class="text-red-400 text-xs text-center py-8">'+e.message+'</div>'; }
+        }
+
+        // === INIT ===
+        loadConfig();
+        player.addEventListener('loadedmetadata', () => {
+            if (Object.keys(boxConfig).length) renderBoxes();
+            else setMode('single');
+            renderSegmentBars();
+        });
+        player.addEventListener('timeupdate', () => {
+            // Auto-select segment on scrub
+            if (player.duration && segments.length) {
+                const idx = findSegmentAtTime(player.currentTime);
+                if (idx !== currentSegIdx) {
+                    loadSegConfig(idx);
+                }
+            }
+            renderSegmentBars();
+            updateSegmentList();
+        });
+        window.addEventListener('resize', () => {
+            if (player.videoWidth && player.videoHeight) {
+                const parentW = sourceContainerEl.parentElement.clientWidth - 24;
+                const maxH = window.innerHeight * 0.6;
+                let desiredH = parentW / vidAspect;
+                if (desiredH > maxH) desiredH = maxH;
+                sourceContainerEl.style.height = Math.floor(desiredH)+'px';
+            }
+            renderBoxes();
+        });
+        // === CANVAS DRAG & RESIZE (move/resize OUTPUT boxes on preview, independent of source) ===
+        let canvasDrag = null;
+
+        canvas.addEventListener('mousedown', (e) => {
+            const r = canvas.getBoundingClientRect();
+            const mx = ((e.clientX - r.left) / r.width) * canvas.width;
+            const my = ((e.clientY - r.top) / r.height) * canvas.height;
+            const OUT_W = 1080, OUT_H = 1920;
+            if (!outScaleX || !outScaleY) return;
+
+            // Map canvas coords to 9:16 output space
+            const ox = mx / outScaleX;
+            const oy = my / outScaleY;
+
+            const outPos = getCurrentOutputPositions();
+            const keys = Object.keys(outPos);
+
+            // Check for resize handle hit first (within 6 canvas pixels of a corner)
+            const hThreshold = 6 / Math.min(outScaleX, outScaleY);
+            let hitHandle = null;
+            let hitKey = null;
+            for (let i = keys.length - 1; i >= 0; i--) {
+                const k = keys[i];
+                const b = outPos[k];
+                if (!b) continue;
+                const bx = b.x||0, by = b.y||0, bw = b.width||100, bh = b.height||100;
+                const corners = [
+                    { corner: 'se', cx: bx+bw, cy: by+bh },
+                    { corner: 'nw', cx: bx, cy: by },
+                    { corner: 'ne', cx: bx+bw, cy: by },
+                    { corner: 'sw', cx: bx, cy: by+bh },
+                ];
+                for (const c of corners) {
+                    if (Math.abs(ox-c.cx) < hThreshold && Math.abs(oy-c.cy) < hThreshold) {
+                        hitHandle = c.corner; hitKey = k; break;
+                    }
+                }
+                if (hitHandle) break;
+            }
+
+            // If no handle hit, check body hit for drag
+            if (!hitHandle) {
+                for (let i = keys.length - 1; i >= 0; i--) {
+                    const k = keys[i];
+                    const b = outPos[k];
+                    if (ox >= (b.x||0) && ox <= (b.x||0)+(b.width||100) && oy >= (b.y||0) && oy <= (b.y||0)+(b.height||100)) {
+                        hitKey = k; break;
+                    }
+                }
+                if (!hitKey) {
+                    if (player.duration) {
+                        player.currentTime = ((e.clientX - r.left) / r.width) * player.duration;
+                    }
+                    return;
+                }
+            }
+
+            e.preventDefault();
+            const pos = getOutputBoxPosition(hitKey);
+            canvasDrag = { key: hitKey, type: hitHandle ? 'resize' : 'drag', corner: hitHandle, startOX: ox, startOY: oy, origX: pos.x, origY: pos.y, origW: pos.width, origH: pos.height };
+
+            const onMove = (ev) => {
+                if (!canvasDrag) return;
+                const rm = canvas.getBoundingClientRect();
+                const cOX = ((ev.clientX - rm.left) / rm.width) * canvas.width / outScaleX;
+                const cOY = ((ev.clientY - rm.top) / rm.height) * canvas.height / outScaleY;
+                const dx = cOX - canvasDrag.startOX;
+                const dy = cOY - canvasDrag.startOY;
+
+                if (canvasDrag.type === 'drag') {
+                    setOutputBoxPosition(canvasDrag.key, {
+                        x: Math.max(0, canvasDrag.origX + dx),
+                        y: Math.max(0, canvasDrag.origY + dy),
+                        width: canvasDrag.origW,
+                        height: canvasDrag.origH
+                    });
+                } else if (canvasDrag.type === 'resize') {
+                    let nx=canvasDrag.origX, ny=canvasDrag.origY, nw=canvasDrag.origW, nh=canvasDrag.origH;
+                    const c = canvasDrag.corner;
+                    if (c.includes('e')) nw = Math.max(20, canvasDrag.origW + dx);
+                    if (c.includes('w')) { nw = Math.max(20, canvasDrag.origW - dx); nx = canvasDrag.origX + (canvasDrag.origW - nw); }
+                    if (c.includes('s')) nh = Math.max(20, canvasDrag.origH + dy);
+                    if (c.includes('n')) { nh = Math.max(20, canvasDrag.origH - dy); ny = canvasDrag.origY + (canvasDrag.origH - nh); }
+                    setOutputBoxPosition(canvasDrag.key, { x:nx, y:ny, width:nw, height:nh });
+                }
+            };
+            const onUp = () => {
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onUp);
+                if (canvasDrag) updateSegConfig();
+                canvasDrag = null;
+            };
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        });
+    </script>
+</body>
+</html>

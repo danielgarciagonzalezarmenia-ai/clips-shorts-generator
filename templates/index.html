@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CLIPS — Shorts Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        slate: {
+                            950: '#0a0a0f', 900: '#12121a', 800: '#1a1a28',
+                            700: '#252540', 600: '#333355', 400: '#8888aa',
+                            300: '#aaaacc', 200: '#cccce0', 100: '#eeeef5'
+                        },
+                        accent: { DEFAULT: '#22d3ee', hover: '#06b6d4', muted: '#0e7490' }
+                    },
+                    fontFamily: { sans: ['Outfit', 'sans-serif'] }
+                }
+            }
+        }
+    </script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Outfit', sans-serif; background: #0a0a0f; color: #eeeef5; min-height: 100dvh; }
+
+        .drop-zone {
+            border: 2px dashed #333355;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            background: linear-gradient(135deg, rgba(34,211,238,0.02) 0%, transparent 100%);
+        }
+        .drop-zone:hover, .drop-zone.dragover {
+            border-color: #22d3ee;
+            background: rgba(34, 211, 238, 0.06);
+            box-shadow: inset 0 0 40px rgba(34, 211, 238, 0.05);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #22d3ee 0%, #06b6d4 100%);
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(34, 211, 238, 0.3); }
+        .btn-primary:active { transform: translateY(0) scale(0.98); }
+        .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+        .btn-secondary {
+            background: #252540;
+            border: 1px solid #333355;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .btn-secondary:hover { border-color: #22d3ee; background: #2a2a48; }
+
+        .card {
+            background: #1a1a28;
+            border: 1px solid #252540;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .card:hover { border-color: #22d3ee; box-shadow: 0 20px 40px -15px rgba(34, 211, 238, 0.12); }
+
+        .glass {
+            background: rgba(26, 26, 40, 0.85);
+            backdrop-filter: blur(24px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .glass::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            pointer-events: none;
+        }
+
+        .progress-bar {
+            background: linear-gradient(90deg, #22d3ee, #06b6d4);
+            transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .skeleton {
+            background: linear-gradient(90deg, #1a1a28 25%, #252540 50%, #1a1a28 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+        }
+        @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+        .animate-float { animation: float 4s ease-in-out infinite; }
+
+        .clip-card {
+            aspect-ratio: 9/16;
+            background: #12121a;
+            border: 1px solid #252540;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            cursor: pointer;
+            overflow: hidden;
+        }
+        .clip-card:hover { transform: scale(1.02); border-color: #22d3ee; }
+
+        input, select {
+            background: #12121a;
+            border: 1px solid #252540;
+            transition: border-color 0.3s;
+            color: #eeeef5;
+        }
+        input:focus, select:focus { outline: none; border-color: #22d3ee; }
+        input[type=range] { accent-color: #22d3ee; }
+
+        .section-divider {
+            height: 1px;
+            background: linear-gradient(90deg, transparent, #252540, transparent);
+        }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #12121a; }
+        ::-webkit-scrollbar-thumb { background: #333355; border-radius: 3px; }
+    </style>
+</head>
+<body class="antialiased">
+    <div class="min-h-[100dvh]">
+        <!-- Header -->
+        <header class="fixed top-0 left-0 right-0 z-50">
+            <div class="glass relative">
+                <div class="max-w-[1400px] mx-auto px-6 py-4 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-accent to-accent-muted flex items-center justify-center">
+                            <i class="ph ph-film-slate text-xl text-slate-950"></i>
+                        </div>
+                        <span class="text-xl font-semibold tracking-tight">CLIPS</span>
+                        <span class="text-[10px] text-slate-600 tracking-widest uppercase ml-2">beta</span>
+                    </div>
+                    <nav class="hidden md:flex items-center gap-8">
+                        <a href="#upload" class="text-sm text-slate-400 hover:text-accent transition-colors">Subir</a>
+                        <a href="#clips" class="text-sm text-slate-400 hover:text-accent transition-colors">Clips</a>
+                        <a href="#youtube" class="text-sm text-slate-400 hover:text-accent transition-colors">YouTube</a>
+                    </nav>
+                    <div class="flex items-center gap-3">
+                        <span id="userDisplay" class="text-xs text-slate-400 hidden items-center gap-1.5">
+                            <i class="ph ph-user-circle"></i>
+                            <span id="usernameText"></span>
+                        </span>
+                        <button class="btn-secondary px-3 py-1.5 rounded-lg text-xs flex items-center gap-1 hidden" id="logoutBtn" onclick="logout()">
+                            <i class="ph ph-sign-out"></i> Salir
+                        </button>
+                        <button class="btn-primary px-5 py-2.5 rounded-xl text-sm font-medium text-slate-950 flex items-center gap-2" onclick="document.getElementById('fileInput').click()">
+                            <i class="ph ph-upload-simple"></i>
+                            Subir video
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="pt-32 pb-20 px-6">
+            <div class="max-w-[1400px] mx-auto">
+                <!-- Hero -->
+                <div class="mb-24" id="upload">
+                    <div class="max-w-3xl">
+                        <div class="flex items-center gap-2 text-accent text-xs tracking-widest uppercase mb-4">
+                            <i class="ph ph-lightning"></i>
+                            <span>Generador de Shorts IA</span>
+                        </div>
+                        <h1 class="text-5xl md:text-7xl font-bold tracking-tighter leading-none mb-6">
+                            Crea Shorts<br/>
+                            <span class="text-accent">virales</span> al instante
+                        </h1>
+                        <p class="text-lg text-slate-400 leading-relaxed max-w-[55ch]">
+                            Extrae los momentos m&aacute;s impactantes de tus videos, personaliza los cuadros y publica en YouTube. Sin edici&oacute;n manual.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-8 mb-24">
+                    <!-- Upload Area -->
+                    <div class="card rounded-3xl p-8 lg:p-10">
+                        <div class="flex items-center justify-between mb-8">
+                            <div>
+                                <h2 class="text-2xl font-semibold tracking-tight">Subir video fuente</h2>
+                                <p class="text-sm text-slate-400 mt-1">MP4, MOV, AVI — m&aacute;ximo 500MB</p>
+                            </div>
+                            <div class="w-12 h-12 rounded-2xl bg-accent/10 flex items-center justify-center">
+                                <i class="ph ph-video text-2xl text-accent"></i>
+                            </div>
+                        </div>
+
+                        <div class="drop-zone rounded-2xl p-14 text-center cursor-pointer relative" id="dropZone">
+                            <div class="w-20 h-20 mx-auto mb-6 rounded-2xl bg-slate-800 flex items-center justify-center animate-float">
+                                <i class="ph ph-upload-simple text-4xl text-accent"></i>
+                            </div>
+                            <p class="text-xl font-medium text-slate-300 mb-2">Arrastra tu video aqu&iacute;</p>
+                            <p class="text-sm text-slate-500">o haz clic para seleccionar un archivo</p>
+                            <div class="mt-6 flex items-center justify-center gap-4 text-xs text-slate-600">
+                                <span class="flex items-center gap-1"><i class="ph ph-check-circle"></i> HD</span>
+                                <span class="flex items-center gap-1"><i class="ph ph-check-circle"></i> 9:16</span>
+                                <span class="flex items-center gap-1"><i class="ph ph-check-circle"></i> 60fps</span>
+                            </div>
+                        </div>
+                        <input type="file" id="fileInput" accept="video/*" class="hidden">
+
+                        <div id="fileInfo" class="hidden mt-6">
+                            <div class="p-4 rounded-xl bg-slate-800/50 border border-slate-700">
+                                <div class="flex items-center gap-4">
+                                    <div class="w-12 h-12 rounded-xl bg-slate-700 flex items-center justify-center">
+                                        <i class="ph ph-file-video text-xl text-accent"></i>
+                                    </div>
+                                    <div class="flex-1 min-w-0">
+                                        <p class="font-medium truncate" id="fileName">video.mp4</p>
+                                        <p class="text-sm text-slate-400" id="fileSize">0 MB</p>
+                                    </div>
+                                    <i class="ph ph-check-circle text-xl text-accent shrink-0"></i>
+                                </div>
+                            </div>
+                            <button class="btn-primary w-full py-4 rounded-xl mt-4 font-medium text-slate-950 flex items-center justify-center gap-2" id="uploadBtn" disabled>
+                                <i class="ph ph-sparkle"></i>
+                                Extraer clips virales
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Side Panel -->
+                    <div class="space-y-4">
+                        <div class="card rounded-2xl p-6">
+                            <h3 class="text-sm font-semibold tracking-tight mb-5 flex items-center gap-2">
+                                <i class="ph ph-sliders text-accent"></i>
+                                Configuraci&oacute;n
+                            </h3>
+                            <div class="space-y-5">
+                                <div>
+                                    <label class="block text-xs text-slate-400 mb-2 tracking-wider uppercase">M&aacute;ximo de clips</label>
+                                    <div class="flex items-center gap-3">
+                                        <input type="number" value="5" min="1" max="20" id="maxClips" class="w-20 px-4 py-3 rounded-xl text-center">
+                                        <span class="text-xs text-slate-500">clips</span>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-slate-400 mb-2 tracking-wider uppercase">Sensibilidad</label>
+                                    <input type="range" min="10" max="100" value="30" class="w-full" id="sensitivity">
+                                    <div class="flex justify-between text-[10px] text-slate-600 mt-1.5">
+                                        <span>Preciso</span>
+                                        <span>Sensible</span>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-slate-400 mb-2 tracking-wider uppercase">Duraci&oacute;n clip (s)</label>
+                                    <div class="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <input type="number" value="15" min="5" max="60" id="clipMinDur" class="w-full px-4 py-3 rounded-xl text-center">
+                                            <span class="text-[10px] text-slate-500 block text-center mt-1">M&iacute;n</span>
+                                        </div>
+                                        <div>
+                                            <input type="number" value="45" min="15" max="60" id="clipMaxDur" class="w-full px-4 py-3 rounded-xl text-center">
+                                            <span class="text-[10px] text-slate-500 block text-center mt-1">M&aacute;x</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- YouTube Connect -->
+                        <div class="card rounded-2xl p-6 border-accent/10">
+                            <div class="flex items-center gap-3 mb-5">
+                                <div class="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center">
+                                    <i class="ph ph-youtube-logo text-xl text-red-400"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-semibold text-sm">YouTube</h3>
+                                    <p class="text-xs text-slate-500">Conecta para subir shorts</p>
+                                </div>
+                            </div>
+                            <button class="btn-secondary w-full py-3 rounded-xl text-sm flex items-center justify-center gap-2" onclick="connectYouTube()">
+                                <i class="ph ph-google-logo"></i>
+                                Conectar cuenta
+                            </button>
+                        </div>
+
+                        <!-- Stats -->
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="card rounded-2xl p-5">
+                                <div class="text-2xl font-bold text-accent" id="statClips">0</div>
+                                <div class="text-xs text-slate-500 mt-1">Clips</div>
+                            </div>
+                            <div class="card rounded-2xl p-5">
+                                <div class="text-2xl font-bold text-accent" id="statProcessed">0</div>
+                                <div class="text-xs text-slate-500 mt-1">Publicados</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Progress -->
+                <div id="progressSection" class="hidden mb-24">
+                    <div class="card rounded-2xl p-6">
+                        <div class="flex items-center gap-4 mb-5">
+                            <div class="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center animate-float">
+                                <i class="ph ph-hourglass text-2xl text-accent"></i>
+                            </div>
+                            <div class="flex-1">
+                                <h3 class="font-semibold" id="progressTitle">Procesando video...</h3>
+                                <p class="text-sm text-slate-400" id="progressStatus">Extrayendo clips virales</p>
+                            </div>
+                            <span class="text-sm font-mono text-accent" id="progressPercent">0%</span>
+                        </div>
+                        <div class="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                            <div class="progress-bar h-full rounded-full" id="progressBar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Clips Grid -->
+                <div id="clipsSection" class="hidden mb-24">
+                    <div class="section-divider mb-12"></div>
+                    <div class="flex items-end justify-between mb-10">
+                        <div>
+                            <h2 class="text-3xl font-bold tracking-tight">Clips detectados</h2>
+                            <p class="text-slate-400 mt-2">Haz clic en un clip para abrir el editor visual</p>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="text-sm text-slate-500" id="clipsCount"></span>
+                            <button class="btn-primary px-5 py-2.5 rounded-xl text-sm font-medium text-slate-950 flex items-center gap-2" onclick="processAll()">
+                                <i class="ph ph-arrows-clockwise"></i>
+                                Procesar todos
+                            </button>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5" id="clipsGrid"></div>
+                </div>
+
+                <!-- Empty State -->
+                <div id="emptyState" class="text-center py-20">
+                    <div class="w-24 h-24 mx-auto mb-6 rounded-3xl bg-slate-800 flex items-center justify-center">
+                        <i class="ph ph-video text-5xl text-slate-600"></i>
+                    </div>
+                    <h2 class="text-2xl font-semibold tracking-tight mb-3">Sube tu primer video</h2>
+                    <p class="text-slate-400 max-w-md mx-auto">Arrastra un archivo de video arriba para comenzar a extraer clips virales autom&aacute;ticamente.</p>
+                </div>
+            </div>
+        </main>
+
+        <footer class="border-t border-slate-800 py-8 px-6">
+            <div class="max-w-[1400px] mx-auto flex items-center justify-between text-sm text-slate-500">
+                <p>&copy; 2026 CLIPS</p>
+                <div class="flex items-center gap-4">
+                    <span class="text-xs text-slate-600">v1.0.0</span>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        let uploadedFilePath = null;
+        let uploadedVideoPath = null;
+        let sessionId = null;
+
+        // Auth check
+        async function checkAuth() {
+            try {
+                const res = await fetch('/api/me');
+                const data = await res.json();
+                if (!data.authenticated) { window.location.href = '/login'; return; }
+                document.getElementById('usernameText').textContent = data.user.username;
+                document.getElementById('userDisplay').classList.remove('hidden');
+                document.getElementById('logoutBtn').classList.remove('hidden');
+            } catch(e) { window.location.href = '/login'; }
+        }
+        async function logout() {
+            await fetch('/api/logout');
+            window.location.href = '/login';
+        }
+        checkAuth();
+
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileName = document.getElementById('fileName');
+        const fileSize = document.getElementById('fileSize');
+        const uploadBtn = document.getElementById('uploadBtn');
+
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+        dropZone.addEventListener('dragleave', () => { dropZone.classList.remove('dragover'); });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
+        });
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) handleFile(e.target.files[0]);
+        });
+
+        function handleFile(file) {
+            if (!file.type.startsWith('video/')) { alert('Selecciona un archivo de video'); return; }
+            uploadedFile = file;
+            fileName.textContent = file.name;
+            fileSize.textContent = formatSize(file.size);
+            fileInfo.classList.remove('hidden');
+            uploadBtn.disabled = false;
+        }
+
+        function formatSize(bytes) {
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        uploadBtn.addEventListener('click', async () => {
+            if (!uploadedFile) return;
+
+            const formData = new FormData();
+            formData.append('video', uploadedFile);
+
+            showProgress('Subiendo video...', 'Subiendo archivo', 5);
+
+            try {
+                const response = await fetch('/api/upload', { method: 'POST', body: formData });
+                const data = await response.json();
+                if (data.error) { alert('Error: ' + data.error); hideProgress(); return; }
+
+                sessionId = data.session_id;
+                uploadedVideoPath = data.video_path || data.session_id;
+
+                showProgress('Extrayendo clips...', 'Iniciando análisis', 10);
+
+                const extractRes = await fetch('/api/extract-clips', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        video_path: uploadedVideoPath,
+                        max_clips: parseInt(document.getElementById('maxClips').value),
+                        sensitivity: parseInt(document.getElementById('sensitivity').value) / 100
+                    })
+                });
+                const extractData = await extractRes.json();
+                if (!extractData.task_id) {
+                    alert('Error: ' + (extractData.error || 'No se pudo iniciar'));
+                    hideProgress(); return;
+                }
+
+                // Poll for completion
+                const clips = await pollTask(extractData.task_id);
+                if (!clips) return;
+
+                document.getElementById('clipsSection').classList.remove('hidden');
+                document.getElementById('emptyState').classList.add('hidden');
+                displayClips(clips);
+                document.getElementById('statClips').textContent = clips.length;
+                document.getElementById('clipsCount').textContent = clips.length + ' clips';
+
+                showProgress('Completado', 'Listo', 100);
+                setTimeout(hideProgress, 2000);
+
+            } catch (error) {
+                alert('Error: ' + error.message);
+                hideProgress();
+            }
+        });
+
+        async function pollTask(taskId) {
+            return new Promise((resolve) => {
+                const interval = setInterval(async () => {
+                    try {
+                        const res = await fetch('/api/task-status/' + taskId);
+                        const status = await res.json();
+                        showProgress(status.message || 'Procesando...', status.message || 'Trabajando', status.progress || 0);
+
+                        if (status.status === 'done') {
+                            clearInterval(interval);
+                            resolve(status.clips || []);
+                        } else if (status.status === 'error' || status.status === 'not_found') {
+                            clearInterval(interval);
+                            alert('Error: ' + (status.error || 'Tarea no encontrada'));
+                            hideProgress();
+                            resolve(null);
+                        }
+                    } catch(e) {
+                        clearInterval(interval);
+                        alert('Error de conexión: ' + e.message);
+                        hideProgress();
+                        resolve(null);
+                    }
+                }, 800);
+            });
+        }
+
+        function showProgress(title, status, percent) {
+            document.getElementById('progressSection').classList.remove('hidden');
+            document.getElementById('progressTitle').textContent = title;
+            document.getElementById('progressStatus').textContent = status;
+            document.getElementById('progressBar').style.width = percent + '%';
+            document.getElementById('progressPercent').textContent = percent + '%';
+        }
+
+        function hideProgress() {
+            document.getElementById('progressSection').classList.add('hidden');
+        }
+
+        function displayClips(clips) {
+            const grid = document.getElementById('clipsGrid');
+            grid.innerHTML = '';
+            clips.forEach((clip, index) => {
+                const card = document.createElement('div');
+                card.className = 'clip-card rounded-2xl relative group';
+                card.onclick = () => window.location.href = `/editor/${clip.id}`;
+
+                const peakPct = Math.round((clip.strength || 0.5) * 100);
+
+                // Try to show thumbnail frame
+                const hasThumb = clip.thumbnail;
+                const bgStyle = hasThumb ? `background-image:url(${clip.thumbnail});background-size:cover;background-position:center` : '';
+
+                card.innerHTML = `
+                    <div class="h-full flex flex-col items-center justify-center p-5 relative" style="${bgStyle}">
+                        <div class="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-slate-950/80"></div>
+                        <div class="w-14 h-14 rounded-2xl bg-accent/15 flex items-center justify-center mb-3 relative z-10 group-hover:scale-110 transition-transform">
+                            <i class="ph ph-play text-2xl text-accent"></i>
+                        </div>
+                        <span class="font-semibold relative z-10">Clip #${index + 1}</span>
+                        <span class="text-xs text-slate-400 relative z-10">${(clip.duration || 30).toFixed(1)}s</span>
+                        <div class="mt-4 w-full relative z-10">
+                            <div class="h-1 bg-slate-700/50 rounded-full overflow-hidden">
+                                <div class="h-full bg-accent rounded-full" style="width: ${peakPct}%"></div>
+                            </div>
+                            <span class="text-[10px] text-slate-500 mt-1 block">Peak ${peakPct}%</span>
+                        </div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        async function connectYouTube() {
+            try {
+                const res = await fetch('/api/youtube/auth');
+                const data = await res.json();
+                if (data.auth_url) {
+                    window.open(data.auth_url, '_blank', 'width=600,height=700');
+                }
+            } catch(e) {
+                alert('Error al conectar YouTube: ' + e.message);
+            }
+        }
+
+        function processAll() {
+            const clips = document.querySelectorAll('.clip-card');
+            if (clips.length === 0) return;
+            window.location.href = '/editor/' + clips[0].onclick.toString().match(/editor\/([^'"]+)/)[1];
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CLIPS — Iniciar sesión</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        slate: { 950: '#0a0a0f', 900: '#12121a', 800: '#1a1a28', 700: '#252540', 600: '#333355', 400: '#8888aa', 300: '#aaaacc', 200: '#cccce0', 100: '#eeeef5' },
+                        accent: { DEFAULT: '#22d3ee', hover: '#06b6d4', muted: '#0e7490' }
+                    },
+                    fontFamily: { sans: ['Outfit', 'sans-serif'] }
+                }
+            }
+        }
+    </script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Outfit', sans-serif; background: #0a0a0f; color: #eeeef5; min-height: 100dvh; display: flex; align-items: center; justify-content: center; }
+        .card { background: #1a1a28; border: 1px solid #252540; transition: border-color 0.3s; }
+        input { background: #12121a; border: 1px solid #252540; color: #eeeef5; padding: 0.6rem 0.8rem; border-radius: 0.5rem; width: 100%; outline: none; transition: border-color 0.3s; }
+        input:focus { border-color: #22d3ee; }
+        .btn-primary { background: linear-gradient(135deg, #22d3ee 0%, #06b6d4 100%); transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(34, 211, 238, 0.3); }
+        .btn-primary:active { transform: translateY(0) scale(0.98); }
+        .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+    </style>
+</head>
+<body>
+    <div class="card rounded-2xl p-8 w-full max-w-sm mx-4">
+        <div class="flex items-center gap-2 mb-6 justify-center">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-accent to-accent-muted flex items-center justify-center">
+                <i class="ph ph-film-slate text-lg text-slate-950"></i>
+            </div>
+            <span class="text-xl font-semibold tracking-tight">CLIPS</span>
+        </div>
+
+        <div id="loginForm">
+            <h2 class="text-lg font-medium mb-4">Iniciar sesión</h2>
+            <div class="space-y-3">
+                <div>
+                    <label class="text-xs text-slate-400 block mb-1">Usuario</label>
+                    <input type="text" id="loginUsername" placeholder="Tu usuario" autocomplete="username">
+                </div>
+                <div>
+                    <label class="text-xs text-slate-400 block mb-1">Contraseña</label>
+                    <input type="password" id="loginPassword" placeholder="••••••" autocomplete="current-password">
+                </div>
+                <button class="btn-primary w-full py-2.5 rounded-lg font-medium mt-1" onclick="login()">Entrar</button>
+                <p class="text-xs text-slate-400 text-center mt-3">
+                    ¿No tienes cuenta?
+                    <a href="#" class="text-accent hover:underline" onclick="showRegister()">Registrarse</a>
+                </p>
+            </div>
+        </div>
+
+        <div id="registerForm" class="hidden">
+            <h2 class="text-lg font-medium mb-4">Crear cuenta</h2>
+            <div class="space-y-3">
+                <div>
+                    <label class="text-xs text-slate-400 block mb-1">Usuario</label>
+                    <input type="text" id="registerUsername" placeholder="Elige un usuario" autocomplete="username">
+                </div>
+                <div>
+                    <label class="text-xs text-slate-400 block mb-1">Contraseña</label>
+                    <input type="password" id="registerPassword" placeholder="Mínimo 4 caracteres" autocomplete="new-password">
+                </div>
+                <button class="btn-primary w-full py-2.5 rounded-lg font-medium mt-1" onclick="register()">Crear cuenta</button>
+                <p class="text-xs text-slate-400 text-center mt-3">
+                    ¿Ya tienes cuenta?
+                    <a href="#" class="text-accent hover:underline" onclick="showLogin()">Iniciar sesión</a>
+                </p>
+            </div>
+        </div>
+
+        <div id="errorMsg" class="text-red-400 text-xs text-center mt-3 hidden"></div>
+    </div>
+
+    <script>
+        async function login() {
+            const username = document.getElementById('loginUsername').value.trim();
+            const password = document.getElementById('loginPassword').value.trim();
+            if (!username || !password) return showError('Completa todos los campos');
+            try {
+                const res = await fetch('/api/login', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username, password}) });
+                const data = await res.json();
+                if (data.success) window.location.href = '/';
+                else showError(data.error || 'Error');
+            } catch(e) { showError('Error de conexión'); }
+        }
+
+        async function register() {
+            const username = document.getElementById('registerUsername').value.trim();
+            const password = document.getElementById('registerPassword').value.trim();
+            if (!username || !password) return showError('Completa todos los campos');
+            if (password.length < 4) return showError('La contraseña debe tener al menos 4 caracteres');
+            try {
+                const res = await fetch('/api/register', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username, password}) });
+                const data = await res.json();
+                if (data.success) window.location.href = '/';
+                else showError(data.error || 'Error');
+            } catch(e) { showError('Error de conexión'); }
+        }
+
+        function showRegister() {
+            document.getElementById('loginForm').classList.add('hidden');
+            document.getElementById('registerForm').classList.remove('hidden');
+            hideError();
+        }
+
+        function showLogin() {
+            document.getElementById('registerForm').classList.add('hidden');
+            document.getElementById('loginForm').classList.remove('hidden');
+            hideError();
+        }
+
+        function showError(msg) { const e=document.getElementById('errorMsg'); e.textContent=msg; e.classList.remove('hidden'); }
+        function hideError() { document.getElementById('errorMsg').classList.add('hidden'); }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                if (!document.getElementById('registerForm').classList.contains('hidden')) register();
+                else login();
+            }
+        });
+    </script>
+</body>
+</html>
