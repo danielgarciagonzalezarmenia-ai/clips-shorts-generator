@@ -1,13 +1,11 @@
 from flask import Flask, render_template, request, jsonify, session, send_from_directory, redirect
 import os
 import uuid
-import json
 import threading
 import time
 import cv2
-from datetime import datetime
 from functools import wraps
-from database import init_db, create_user, verify_user, get_user
+from database import create_user, verify_user, get_user, save_config as fb_save, load_config as fb_load, delete_user_data
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
@@ -230,15 +228,7 @@ def save_config():
     segments = data.get('segments', [])
     if not clip_id:
         return jsonify({'error': 'Clip ID requerido'}), 400
-    clips_dir = os.path.join(app.config['CLIPS_FOLDER'], str(session['user_id']))
-    os.makedirs(clips_dir, exist_ok=True)
-    data_path = os.path.join(clips_dir, f'{clip_id}_config.json')
-    with open(data_path, 'w') as f:
-        json.dump({
-            'clip_id': clip_id,
-            'segments': segments,
-            'updated_at': datetime.now().isoformat()
-        }, f, indent=2)
+    fb_save(clip_id, str(session['user_id']), segments)
     return jsonify({'success': True})
 
 # API: Cargar config
@@ -246,11 +236,10 @@ def save_config():
 @login_required
 def load_config(clip_id):
     clips_dir = os.path.join(app.config['CLIPS_FOLDER'], str(session['user_id']))
-    data_path = os.path.join(clips_dir, f'{clip_id}_config.json')
     clip_path = os.path.join(clips_dir, f'{clip_id}.mp4')
-    if os.path.exists(data_path):
-        with open(data_path, 'r') as f:
-            return jsonify(json.load(f))
+    data = fb_load(clip_id, str(session['user_id']))
+    if data:
+        return jsonify(data)
     cap = cv2.VideoCapture(clip_path)
     duration = cap.get(cv2.CAP_PROP_FRAME_COUNT) / cap.get(cv2.CAP_PROP_FPS) if cap.get(cv2.CAP_PROP_FPS) else 10
     cap.release()
@@ -399,10 +388,7 @@ def delete_account():
         up = os.path.join(folder, uid)
         if os.path.exists(up):
             shutil.rmtree(up)
-    conn = __import__('sqlite3').connect('users.db')
-    conn.execute('DELETE FROM users WHERE id = ?', (session['user_id'],))
-    conn.commit()
-    conn.close()
+    delete_user_data(uid)
     session.clear()
     return jsonify({'success': True})
 
@@ -416,7 +402,6 @@ def serve_upload(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 if __name__ == '__main__':
-    init_db()
     print("Iniciando Clips...")
     print("Abre http://localhost:5000")
     app.run(debug=True, host='0.0.0.0', port=5000, use_reloader=False)

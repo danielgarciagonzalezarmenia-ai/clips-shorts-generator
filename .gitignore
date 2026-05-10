@@ -35,3 +35,6 @@ latest_video_title.txt
 test_video_id.txt
 video_title.txt
 video_to_process.txt
+
+firebase_credentials.json
+clips-shorts-firebase-adminsdk-fbsvc-*.json
